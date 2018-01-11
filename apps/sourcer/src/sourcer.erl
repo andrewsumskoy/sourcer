@@ -186,10 +186,14 @@
     Reporter({value, Res}).
 
 'textDocument/hover'(State, #{textDocument:=#{uri:=URI}, position:=Position}, Reporter) ->
-    Source = sourcer_documents:get_element(State#state.open_files, URI, Position),
+    Pos = get_pos(Position),
+    {Model, _} = sourcer_documents:get_model(State#state.open_files, URI),
+    Source = sourcer_db:get_element_at_pos(Model, Pos),
     %% [markedstring()]:: String (=markdown)
+    Hover = get_hover(Source),
     Res = #{
-      contents => []
+      contents => #{kind  => <<"markdown">>, 
+                    value => unicode:characters_to_binary(Hover)}
      %%, range => lsp_utils:range(_Position, _Position)
      },
     Reporter({value, Res}).
@@ -340,3 +344,25 @@ encode_file_change(#{type:=2}=Change) ->
 encode_file_change(#{type:=3}=Change) ->
     Change#{type=>deleted}.
 
+get_pos(#{line:=L, character:=C}) ->
+    {L, C+1}.
+
+get_hover({Def,Ref}) ->
+    get_def_hover(Def)++get_ref_hover(Ref).
+
+get_def_hover([]) ->
+    [];
+get_def_hover([{K,_,_,D}]) ->
+    Cmt = case maps:is_key(comments, D) of 
+            true ->
+                maps:get(comments, D);
+            _ ->
+                []
+        end,
+    ["    <i>",Cmt,"</i>\n\n"].
+    
+get_ref_hover([]) ->
+    [];
+get_ref_hover([R]) ->
+    io_lib:format("## ff~n~n*Ref*: ~n```erlang~n~30p~n```~n~n", [R]).
+    
